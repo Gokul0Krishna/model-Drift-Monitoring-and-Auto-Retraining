@@ -1,43 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 function App() {
-  const [systemState, setSystemState] = useState({
-    status: "CONNECTING",
-    total_predictions: 0,
-    drift_score: 0.0,
-    drift_detected: false,
-    last_updated: "Never"
-  });
+  const [metrics, setMetrics] = useState({ total_inferences: 0, drift_share: 0, status: "Idle" });
+  const [systemState, setSystemState] = useState("DISCONNECTED");
+  const wsRef = useRef(null);
 
   useEffect(() => {
-    // Establish a live pipeline over a native WebSocket connection
-    const wsUrl = process.env.REACT_APP_WS_URL || "ws://localhost:8000/ws/metrics";
-    const ws = new WebSocket(wsUrl);
+    let reconnectTimeout;
 
-    ws.onopen = () => {
-      console.log("WebSocket connection established successfully.");
+    const connectWebSocket = () => {
+      console.log("🔌 Attempting to connect to MLOps WebSocket...");
+
+      // Explicitly targeting localhost loopback
+      const ws = new WebSocket("ws://127.0.0.1:8000/ws/metrics");
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("✅ WebSocket Connected to FastAPI Server!");
+        setSystemState("CONNECTED");
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setMetrics(data);
+        } catch (err) {
+          console.error("❌ Error parsing live socket metrics:", err);
+        }
+      };
+
+      ws.onclose = (e) => {
+        console.log(`🔌 WebSocket connection closed (${e.reason}). Reconnecting in 3s...`);
+        setSystemState("DISCONNECTED");
+        // Auto-retry connection loop
+        reconnectTimeout = setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onerror = (err) => {
+        console.error("⚠️ WebSocket caught a handshake error:", err);
+        ws.close(); // Force clean close to trigger the reconnect loop
+      };
     };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setSystemState({
-        status: data.drift_detected ? "RETRAINING_IN_PROGRESS" : "HEALTHY",
-        total_predictions: data.total_predictions,
-        drift_score: data.drift_score,
-        drift_detected: data.drift_detected,
-        last_updated: new Date().toLocaleTimeString()
-      });
-    };
+    connectWebSocket();
 
-    ws.onerror = (error) => {
-      console.error("WebSocket Error: ", error);
+    // Cleanup listeners on component unmount
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+      clearTimeout(reconnectTimeout);
     };
-
-    ws.onclose = () => {
-      setSystemState((prev) => ({ ...prev, status: "DISCONNECTED" }));
-    };
-
-    return () => ws.close();
   }, []);
 
   // UI Status Badges Dynamic Styling

@@ -11,6 +11,9 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from sqlalchemy.exc import OperationalError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import WebSocket, WebSocketDisconnect
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,6 +53,14 @@ async def lifespan(app: FastAPI):
 
 # Pass the lifespan context manager into your FastAPI initialization
 app = FastAPI(title="Production MLOps Serving Engine", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, swap ["*"] for ["http://localhost:3000"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- LOAD ML MODEL ---
 try:
@@ -98,3 +109,19 @@ async def check_drift_endpoint(background_tasks: BackgroundTasks):
         return {"status": "Drift Detected", "action": "Retraining triggered via Celery"}
         
     return {"status": "No Drift Detected", "action": "None"}
+
+@app.websocket("/ws/metrics")
+async def websocket_endpoint(websocket: WebSocket):
+    # 🛠️ THE FIX: Accept the handshake explicitly. 
+    # If your FastAPI setup uses strict origin checking, you can accept it like this:
+    await websocket.accept()
+    
+    logger.info("🔌 Frontend WebSocket client connected successfully!")
+    try:
+        while True:
+            # Keep the connection open and listen/send data
+            data = await websocket.receive_text()
+            # (Your existing metric broadcast loop code goes here...)
+            
+    except WebSocketDisconnect:
+        logger.info("🔌 Frontend WebSocket client disconnected.")
