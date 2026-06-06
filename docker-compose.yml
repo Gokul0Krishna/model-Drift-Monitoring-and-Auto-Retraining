@@ -1,8 +1,8 @@
-version: '3.8'
-
 services:
+  # 1. Official Pre-built Database Engine
   db:
     image: postgres:15
+    container_name: mlops_postgres_db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres_password
@@ -12,22 +12,28 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # 2. Official Pre-built In-Memory Broker
   redis:
     image: redis:7-alpine
+    container_name: mlops_redis_broker
     ports:
       - "6379:6379"
 
+  # 3. Official Pre-built Tracking Suite
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.11.3
+    container_name: mlops_mlflow_server
     ports:
       - "5000:5000"
     command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./artifacts
 
+  # 4. Your Custom Code acting as the Serving Gateway
   backend_api:
-    build: ./backend
+    build: ./ml_pipelines/backend
+    container_name: mlops_fastapi_api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./backend:/app
+      - ./ml_pipelines/backend:/app
     ports:
       - "8000:8000"
     environment:
@@ -39,11 +45,13 @@ services:
       - redis
       - mlflow
 
+  # 5. Your Custom Code acting as the Heavy Worker
   celery_worker:
-    build: ./backend
-    command: celery -A worker.celery_app worker --loglevel=info
+    build: ./ml_pipelines/backend
+    container_name: mlops_celery_worker
+    command: celery -A app.tasks.celery_app worker --loglevel=info
     volumes:
-      - ./backend:/app
+      - ./ml_pipelines/backend:/app
     environment:
       - DATABASE_URL=postgresql://postgres:postgres_password@db:5432/mlops_db
       - REDIS_URL=redis://redis:6379/0
@@ -52,8 +60,10 @@ services:
       - redis
       - db
 
-dashboard:
-    build: ./dashboard
+  # 6. Your Compiled Static Web App Dashboard
+  dashboard:
+    build: ./ml_pipelines/dashboard/
+    container_name: mlops_react_dashboard
     ports:
       - "3000:80"
     environment:

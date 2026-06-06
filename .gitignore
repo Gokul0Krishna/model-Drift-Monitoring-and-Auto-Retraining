@@ -1,3 +1,58 @@
-venv
-ml_pipelines/backend/mlops_drift_retraining_pipeline.egg-info
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Secrets and environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+credentials.json
+
+# Python build and cache files
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.egg-info/
+**/build/
+**/dist/
+**/.eggs/
+**/*.egg
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/.ipynb_checkpoints/
+**/.mypy_cache/
+
+# Node (Dashboard) build and dependencies
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+**/ml_pipelines/dashboard/build/
+**/ml_pipelines/dashboard/dist/
+
+# Machine Learning & Tracking
+mlflow.db
+**/mlruns/
+**/mlflow-artifacts/
+**/*.db
+**/*.sqlite
+**/*.pkl
+**/*.joblib
+**/*.h5
+**/*.pt
+**/*.pth
+
+# IDEs & System Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
