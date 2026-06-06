@@ -1,7 +1,7 @@
 from celery import Celery
 import os
 import pandas as pd
-from ..ml.pipline import train_and_register_model
+from ml.pipline import train_and_register_model
 from .database import get_all_production_data
 import logging
 

@@ -2,9 +2,10 @@ from fastapi import FastAPI, BackgroundTasks, Depends
 import mlflow.pyfunc
 import pandas as pd
 from app.tasks import trigger_auto_retraining
-from ..ml.moitoring import check_data_drift
+from ml.moitoring import check_data_drift
 from app.database import get_db,get_all_production_data,engine
 from sqlalchemy.orm import Session
+from app.model import PredictionLog
 import logging
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ async def predict(features: dict, db: Session = Depends(get_db)):
     prediction = model.predict(df)[0]
     
     # 2. Log incoming feature arrays asynchronously to PostgreSQL for drift checking
-    record = PredictionRecord(features=features, prediction=int(prediction))
+    record = PredictionLog(features=features, prediction=int(prediction))
     db.add(record)
     db.commit()
     

@@ -68,7 +68,6 @@ mdurl==0.1.2
 mlflow==3.13.0
 mlflow-skinny==3.13.0
 mlflow-tracing==3.13.0
--e git+https://github.com/Gokul0Krishna/model-Drift-Monitoring-and-Auto-Retraining-.git@9879bba866755e0e817bea2df363183f4134555e#egg=mlops_drift_retraining_pipeline&subdirectory=ml_pipelines\backend
 msgspec==0.21.1
 multidict==6.7.1
 multipart==1.3.1
@@ -102,7 +101,6 @@ pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 pytz==2026.2
-pywin32==312
 PyYAML==6.0.3
 redis==6.4.0
 regex==2026.5.9
