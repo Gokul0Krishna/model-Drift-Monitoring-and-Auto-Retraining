@@ -2,23 +2,23 @@ from fastapi import FastAPI, BackgroundTasks, Depends
 import mlflow.pyfunc
 import pandas as pd
 from app.tasks import trigger_auto_retraining
-from ml.monitoring import check_data_drift
-# Assuming SQLAlchemy infrastructure configured in database.py
-from app.database import engine, PredictionRecord 
+from ..ml.moitoring import check_data_drift
+from app.database import get_db,get_all_production_data,engine
 from sqlalchemy.orm import Session
+import logging
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Production MLOps Serving Engine")
 
-# Load production model dynamically from MLflow registry on startup
-# 'models:/production_model/latest' matches your registered name
 try:
     model = mlflow.pyfunc.load_model("models:/production_model/latest")
-except Exception:
-    model = None # Handle fallback if no model is registered on first run
+    logging.info('latest model found')
+except Exception as e:
+    model = None 
+    logging.error('No model found')
 
 @app.post("/predict")
 async def predict(features: dict, db: Session = Depends(get_db)):
-    # 1. Convert feature dict to dataframe for inference
     df = pd.DataFrame([features])
     prediction = model.predict(df)[0]
     

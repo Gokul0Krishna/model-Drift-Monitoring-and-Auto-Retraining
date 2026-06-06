@@ -1,2 +1,3 @@
 venv
 ml_pipelines/backend/mlops_drift_retraining_pipeline.egg-info
+.env

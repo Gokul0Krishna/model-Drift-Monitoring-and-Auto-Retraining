@@ -1,7 +1,7 @@
 from celery import Celery
 import os
 import pandas as pd
-from ml.pipeline import train_and_register_model
+from ..ml.pipline import train_and_register_model
 from database import get_all_production_data # Helper to fetch from Postgres
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
