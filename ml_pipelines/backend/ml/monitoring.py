@@ -1,5 +1,5 @@
-from  evidently import Report
-from  evidently.metrics import DataDriftPreset
+from evidently import Report
+from evidently.presets import DataDriftPreset
 import pandas as pd
 
 def check_data_drift(reference_df: pd.DataFrame, current_df: pd.DataFrame) -> bool:

@@ -2,7 +2,7 @@ from fastapi import FastAPI, BackgroundTasks, Depends
 import mlflow.pyfunc
 import pandas as pd
 from app.tasks import trigger_auto_retraining
-from ml.moitoring import check_data_drift
+from ml.monitoring import check_data_drift
 from app.database import get_db,get_all_production_data,engine
 from sqlalchemy.orm import Session
 from app.model import PredictionLog
