@@ -2,6 +2,10 @@ from sqlalchemy import Column, Integer, Float, Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import JSONB
 import datetime
 from app.database import Base
+from pydantic import BaseModel
+
+class PredictionRequest(BaseModel):
+    features: dict
 
 class PredictionLog(Base):
     __tablename__ = "prediction_logs"
@@ -9,8 +13,7 @@ class PredictionLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     features = Column(JSONB, nullable=False)
     predicted_output = Column(Integer, nullable=False)
-    ground_truth = Column(Integer, nullable=True)
-    predicted_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    predicted_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
 class DriftMetric(Base):
     __tablename__ = "drift_metrics"

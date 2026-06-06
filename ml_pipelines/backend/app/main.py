@@ -3,28 +3,81 @@ import mlflow.pyfunc
 import pandas as pd
 from app.tasks import trigger_auto_retraining
 from ml.monitoring import check_data_drift
-from app.database import get_db,get_all_production_data,engine
+from app.database import get_db, get_all_production_data, engine
 from sqlalchemy.orm import Session
-from app.model import PredictionLog
+from app.database import Base 
+from app.model import PredictionLog, PredictionRequest
 import logging
+import time
+from contextlib import asynccontextmanager
+from sqlalchemy.exc import OperationalError
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Production MLOps Serving Engine")
+# --- LIFESPAN STARTUP CHECK ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Blocks application startup until the database is fully reachable,
+    then verifies and creates database tables before proceeding.
+    """
+    logger.info("🔍 Checking database connection status...")
+    retries = 10
+    while retries > 0:
+        try:
+            # Attempt a basic low-level connection test handshake
+            with engine.connect() as connection:
+                logger.info("✅ Database is reachable and online!")
+                break
+        except OperationalError:
+            retries -= 1
+            logger.warning(f"⏳ Database not ready yet. Retrying... ({retries} retries left)")
+            time.sleep(2)
+            
+    if retries == 0:
+        logger.error("❌ Fatal: Could not connect to the database. Exiting application setup.")
+        raise RuntimeError("Database connection timed out.")
 
+    # Automatically create missing tables (prediction_logs, etc.) based on your SQLAlchemy models
+    logger.info("🛠️ Synchronizing database schema models...")
+    Base.metadata.create_all(bind=engine)
+    logger.info("🚀 Database schema up to date. Handing control to FastAPI.")
+    
+    yield  # The application runs and services requests here
+    
+    logger.info("🔌 Shutting down serving engine assets.")
+
+# Pass the lifespan context manager into your FastAPI initialization
+app = FastAPI(title="Production MLOps Serving Engine", lifespan=lifespan)
+
+# --- LOAD ML MODEL ---
 try:
     model = mlflow.pyfunc.load_model("models:/production_model/latest")
-    logging.info('latest model found')
+    logger.info('Latest model found and loaded successfully.')
 except Exception as e:
     model = None 
-    logging.error('No model found')
+    logger.error(f'No model found in registry: {e}')
+
 
 @app.post("/predict")
-async def predict(features: dict, db: Session = Depends(get_db)):
-    df = pd.DataFrame([features])
-    prediction = model.predict(df)[0]
+def predict(request: PredictionRequest, db: Session = Depends(get_db)):
+    features_dict = request.features
     
-    # 2. Log incoming feature arrays asynchronously to PostgreSQL for drift checking
-    record = PredictionLog(features=features, prediction=int(prediction))
+    # Run fallback / model prediction logic
+    prediction = 1 
+    if model is not None:
+        try:
+            # Simple conversion if needed for your specific model signature
+            df_input = pd.DataFrame([features_dict])
+            prediction = model.predict(df_input)[0]
+        except Exception as e:
+            logger.error(f"Prediction inference failed, defaulting: {e}")
+
+    record = PredictionLog(
+        features=features_dict,
+        predicted_output=int(prediction)
+    )
     db.add(record)
     db.commit()
     
@@ -32,14 +85,15 @@ async def predict(features: dict, db: Session = Depends(get_db)):
 
 @app.post("/monitor/check-drift")
 async def check_drift_endpoint(background_tasks: BackgroundTasks):
-    # Fetch data sets from your DB layers
     reference_df = pd.read_csv("ml/reference.csv")
     current_df = get_all_production_data()
     
+    if current_df.empty:
+        return {"status": "Insufficient Data", "action": "Log more predictions first."}
+        
     drift_detected = check_data_drift(reference_df, current_df)
     
     if drift_detected:
-        # Trigger training async without freezing the API response
         trigger_auto_retraining.delay()
         return {"status": "Drift Detected", "action": "Retraining triggered via Celery"}
         
