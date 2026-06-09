@@ -56,3 +56,6 @@ mlflow.db
 .DS_Store
 Thumbs.db
 *.swp
+
+model_drift_shipping_pipeline/data/train_set.csv
+model_drift_shipping_pipeline/data/test_set.csv

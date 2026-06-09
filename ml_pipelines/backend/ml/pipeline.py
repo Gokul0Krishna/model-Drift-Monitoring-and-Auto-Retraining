@@ -1,6 +1,6 @@
 import mlflow
 import mlflow.xgboost
-from xgboost import XGBClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score,precision_score,recall_score
 import pandas as pd
 
@@ -20,10 +20,10 @@ def train_and_register_model(train_df, val_df, model_name="production_model"):
 
         preds = model.predict_proba(X_val)[:, 1]
         auc = roc_auc_score(y_val, preds)
-        pre = precision_score(y_val,preds)
-        rec = recall_score(y_val,preds)
+        # pre = precision_score(y_val,preds)
+        # rec = recall_score(y_val,preds)
         # mlflow.log_metric("auc", auc)
-        mlflow.log_metrics({"auc": auc, "precision": pre,'recall':rec})
+        mlflow.log_metrics({"auc": auc})
 
         input_example = X_train.iloc[[0]]
         model_info = mlflow.xgboost.log_model(
@@ -33,4 +33,4 @@ def train_and_register_model(train_df, val_df, model_name="production_model"):
             input_example=input_example
         )
         
-        return model_info.model_uri, auc, pre, rec
+        return model_info.model_uri, auc
