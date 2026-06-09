@@ -59,3 +59,4 @@ Thumbs.db
 
 model_drift_shipping_pipeline/data/train_set.csv
 model_drift_shipping_pipeline/data/test_set.csv
+model_drift_shipping_pipeline/models/*
