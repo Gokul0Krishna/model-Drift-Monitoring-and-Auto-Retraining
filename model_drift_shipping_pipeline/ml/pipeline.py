@@ -65,13 +65,13 @@ def process_raw_data(action:str='train'):
     except Exception as e:
         logger.error(f'AN EXCEPTION RAISED IN THE PREPROCESSING {e}',exc_info=True)
         raise ValueError("AN EXCEPTION RAISED IN THE PREPROCESSING")
-    
+
+    X = procesed_df.drop('remainder__Reached.on.Time_Y.N',axis=1)
+    y = procesed_df['remainder__Reached.on.Time_Y.N']
     if action == 'train':
-        X_train,X_test,y_train,y_test=train_test_split(procesed_df,df['remainder__Reached.on.Time_Y.N'],test_size=0.2)
+        X_train,X_test,y_train,y_test=train_test_split(X,y,test_size=0.3,random_state=42)
         return X_train,X_test,y_train,y_test
     else:
-        X = procesed_df.drop('remainder__Reached.on.Time_Y.N',axis=1)
-        y = procesed_df['remainder__Reached.on.Time_Y.N']
         return X,y
 
 if __name__ == '__main__':
