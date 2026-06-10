@@ -14,7 +14,7 @@ MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI")
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_DIR = BASE_DIR / "models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
-logger = logging.getLogger("model_drift_shipping_pipeline.ml.train")
+logger = logging.getLogger(__name__)
 
 mlflow.set_tracking_uri("MLFLOW_TRACKING_URI") 
 mlflow.set_experiment("model-drift-shipping-pipeline")

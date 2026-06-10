@@ -5,7 +5,7 @@ from sklearn.preprocessing import OneHotEncoder
 import logging
 from sklearn.compose import ColumnTransformer
 
-logger = logging.getLogger("model_drift_shipping_pipeline.ml.pipeline")
+logger = logging.getLogger(__name__)
 categorical_features = ['Warehouse_block', 'Mode_of_Shipment','Product_importance', 'Gender']
         
 def _process_pipeline(df:pd.DataFrame):
