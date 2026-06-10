@@ -1,5 +1,7 @@
 services:
-  # 1. Official Pre-built Database Engine
+  # ──────────────────────────────────────────────
+  # 1. PostgreSQL Database
+  # ──────────────────────────────────────────────
   db:
     image: postgres:15
     container_name: mlops_postgres_db
@@ -11,29 +13,53 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./model_drift_shipping_pipeline/scripts/init_schema.sql:/docker-entrypoint-initdb.d/init_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # 2. Official Pre-built In-Memory Broker
+  # ──────────────────────────────────────────────
+  # 2. Redis Broker (for Celery)
+  # ──────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: mlops_redis_broker
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # 3. Official Pre-built Tracking Suite
+  # ──────────────────────────────────────────────
+  # 3. MLflow Tracking Server
+  # ──────────────────────────────────────────────
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.11.3
     container_name: mlops_mlflow_server
     ports:
       - "5000:5000"
-    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./artifacts
-
-  # 4. Your Custom Code acting as the Serving Gateway
-  backend_api:
-    build: ./ml_pipelines/backend
-    container_name: mlops_fastapi_api
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./ml_pipelines/backend:/app
+      - mlflow_data:/mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+
+  # ──────────────────────────────────────────────
+  # 4. FastAPI Backend (Serving Gateway)
+  # ──────────────────────────────────────────────
+  backend_api:
+    build: ./model_drift_shipping_pipeline
+    container_name: mlops_fastapi_api
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./model_drift_shipping_pipeline:/app
     ports:
       - "8000:8000"
     environment:
@@ -41,35 +67,34 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
-      - db
-      - redis
-      - mlflow
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
 
-  # 5. Your Custom Code acting as the Heavy Worker
+  # ──────────────────────────────────────────────
+  # 5. Celery Worker (Drift Analysis / Retraining)
+  # ──────────────────────────────────────────────
   celery_worker:
-    build: ./ml_pipelines/backend
+    build: ./model_drift_shipping_pipeline
     container_name: mlops_celery_worker
-    command: celery -A app.tasks.celery_app worker --loglevel=info
+    command: celery -A backend.worker.celery_app worker --loglevel=info
     volumes:
-      - ./ml_pipelines/backend:/app
+      - ./model_drift_shipping_pipeline:/app
     environment:
       - DATABASE_URL=postgresql://postgres:postgres_password@db:5432/mlops_db
       - REDIS_URL=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
-      - redis
-      - db
-
-  # 6. Your Compiled Static Web App Dashboard
-  dashboard:
-    build: ./ml_pipelines/dashboard/
-    container_name: mlops_react_dashboard
-    ports:
-      - "3000:80"
-    environment:
-      - REACT_APP_WS_URL=ws://localhost:8000/ws/metrics
-    depends_on:
-      - backend_api
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
 
 volumes:
   postgres_data:
+  mlflow_data:
