@@ -4,7 +4,7 @@ from celery import Celery
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import logging
-from 
+from ..ml.monitor import run_drift_check
 
 load_dotenv()
 logger = logging.getLogger(__name__)

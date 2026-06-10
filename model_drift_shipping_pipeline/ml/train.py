@@ -1,6 +1,6 @@
 import joblib
 from sklearn.ensemble import RandomForestClassifier
-from pipeline import process_raw_data
+from .pipeline import process_raw_data
 import logging
 from pathlib import Path
 import mlflow

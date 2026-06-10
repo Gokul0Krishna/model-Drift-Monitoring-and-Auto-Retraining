@@ -12,7 +12,6 @@ engine = create_engine(
     max_overflow=10,      
     pool_pre_ping=True    
 )
-
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 def verify_db_connection():
