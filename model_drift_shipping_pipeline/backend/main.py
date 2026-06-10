@@ -1,5 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, Depends
-import mlflow.pyfunc
+from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException
 import pandas as pd
 import logging
 import time
@@ -7,12 +6,23 @@ from contextlib import asynccontextmanager
 from sqlalchemy.exc import OperationalError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import WebSocket, WebSocketDisconnect
+from pathlib import Path
+from sqlalchemy.orm import Session
+from typing import List
+
+
 
 from .database import engine, Base, get_db
+from .worker import trigger_analysis
+from .schemas import IngestionPayload
+from .model import ShippingRecordModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_LOC = BASE_DIR / 'models/shipping_rf_model.pkl'
+TEST_LOC = BASE_DIR / 'data/test_set.csv'
 # --- LIFESPAN STARTUP CHECK ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,8 +30,8 @@ async def lifespan(app: FastAPI):
     Blocks application startup until the database is fully reachable,
     then verifies and creates database tables before proceeding.
     """
-    logger.info("🔍 Checking database connection status...")
-    retries = 10
+    logger.info("Checking database connection status...")
+    retries = 5
     while retries > 0:
         try:
             with engine.connect() as connection:
@@ -54,9 +64,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-try:
-    model = mlflow.pyfunc.load_model("models:/production_model/latest")
-    logger.info('Latest model found and loaded successfully.')
-except Exception as e:
-    model = None 
-    logger.error(f'No model found in registry: {e}')
+
+@app.post("/ingest")
+def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
+    if not payload.records:
+        logger.warning("Payload record collection is empty.")
+        raise HTTPException(status_code=400, detail="Payload record collection is empty.")
+    logger.info(f'PAYLOAD RECIVED -- {len(payload.records)} -- records')
+    try:
+        inserted_objects = []
+        for record in payload.records:
+            db_record = ShippingRecordModel(**record.model_dump())
+            inserted_objects.append(db_record)
+        
+        db.bulk_save_objects(inserted_objects, return_defaults=True)
+        db.commit()
+        logger.info(f'PUSHED PAYLOAD TO THE DATABASE -- {len(inserted_objects)} -- records')
+        start_id = inserted_objects[0].id
+        end_id = inserted_objects[-1].id
+        logger.info(f"Successfully stored {len(inserted_objects)} records. ID Range: {start_id} - {end_id}")
+
+        trigger_analysis.delay(start_id, end_id)
+        
+
+        return {
+            "status": "success",
+            "message": "Data saved and drift execution queued.",
+            "records_ingested": len(inserted_objects),
+            "batch_range": {"start_id": start_id, "end_id": end_id}
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed handling ingestion storage stream: {e}")
+        raise HTTPException(status_code=500, detail="Database write failure.")
+
+    
+        

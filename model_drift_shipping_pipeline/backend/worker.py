@@ -34,11 +34,14 @@ def trigger_analysis(start_id, end_id):
         df = production_batch_df = pd.read_sql(query, con=engine)
     except Exception as e:
         logger.error(f'DATA INGESTION ERROR: {e}')
+        engine.dispose()
         return
-    
+    engine.dispose()
     logger.info('DATA INGESTION SUCCESSFULL')
     logger.info('STARTING DRIFT CHECK')
     drift_detected = run_drift_check(production_batch_df)
     logger.info(f'DRIFT DETECTED: {drift_detected}')
+
+
     return drift_detected
     
