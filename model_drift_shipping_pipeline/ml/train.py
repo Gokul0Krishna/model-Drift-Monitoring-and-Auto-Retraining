@@ -7,6 +7,7 @@ import mlflow
 import mlflow.sklearn
 import os
 from dotenv import load_dotenv
+os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
 
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI")
 
@@ -49,7 +50,8 @@ def train_and_save_model(model_name: str = 'shipping_rf_model'):
             mlflow.sklearn.log_model(
                 sk_model=model,
                 artifact_path="model_artifacts",
-                registered_model_name=model_name 
+                registered_model_name=model_name,
+                serialization_format="skops,pickle"
             )
             joblib.dump(model, MODEL_DIR / f'{model_name}.pkl')
             
