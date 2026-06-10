@@ -40,17 +40,17 @@ def _process_pipeline(df:pd.DataFrame):
     return processed_df
    
 
-def process_raw_data(action:str='train'):
+def process_raw_data(df=pd.DataFrame() ,action:str='train'):
     '''
     load data based on action(train/test) and split into x and y
     '''
-    if action=='train':
+    if action == 'train' and df.empty:
         try:
             df = pd.read_csv('model_drift_shipping_pipeline/data/train_set.csv')
             logger.info('DATASET FOUND AND LOADED')
         except Exception as e:
             logger.error('EXCEPTION RAISED',e)
-    elif action=='test':
+    elif action=='test' and df.empty:
         try:
             df = pd.read_csv('model_drift_shipping_pipeline/data/test_set.csv')
             logger.info('DATASET FOUND AND LOADED')

@@ -44,4 +44,3 @@ def trigger_analysis(start_id, end_id):
 
 
     return drift_detected
-    
