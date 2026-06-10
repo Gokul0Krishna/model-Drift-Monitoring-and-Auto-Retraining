@@ -49,9 +49,9 @@ def train_and_save_model(model_name: str = 'shipping_rf_model'):
             
             mlflow.sklearn.log_model(
                 sk_model=model,
-                artifact_path="model_artifacts",
+                name="model_artifacts",
                 registered_model_name=model_name,
-                serialization_format="skops,pickle"
+                serialization_format="skops"
             )
             joblib.dump(model, MODEL_DIR / f'{model_name}.pkl')
             
