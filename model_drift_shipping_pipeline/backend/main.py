@@ -96,7 +96,7 @@ def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
         
 
         return {
-            'analysis_id': drift_analyisis.id,
+            'analysis_id': drift_analyisis,
             "records_ingested": len(inserted_objects),
             "batch_range": {"start_id": start_id, "end_id": end_id}
         }
@@ -109,6 +109,7 @@ def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
 
 @app.post('/retrain_model')
 def retrain_model(start_id, end_id):
+
     if CHAMPION_MODEL_PATH.exists():
         champ_model = joblib.load(CHAMPION_MODEL_PATH)
         logger.info('model found and loaded')
