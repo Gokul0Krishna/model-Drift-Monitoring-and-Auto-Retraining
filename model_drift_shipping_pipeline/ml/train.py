@@ -1,6 +1,10 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 import joblib
 from sklearn.ensemble import RandomForestClassifier
-from .pipeline import process_raw_data
+from ml.pipeline import process_raw_data
 import logging
 from pathlib import Path
 import mlflow
@@ -9,10 +13,8 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 
-from ..backend.schemas import db, ShipmentRecord
-from ..backend.database import engine, Base, get_db
+from backend.schemas import ShippingRecordItem 
 from sqlalchemy import create_engine
-
 
 
 os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
@@ -165,4 +167,4 @@ def train_and_save_challenger_model(start_id: int, end_id: int, model_name: str 
 
     
 if __name__ == '__main__':
-    train_and_save_champion_model()
+    print(train_and_save_champion_model())
