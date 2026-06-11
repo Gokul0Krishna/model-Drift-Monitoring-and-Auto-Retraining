@@ -1,3 +1,5 @@
+from backend.worker import cost_eval
+import joblib
 from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException
 import pandas as pd
 import logging
@@ -9,20 +11,26 @@ from fastapi import WebSocket, WebSocketDisconnect
 from pathlib import Path
 from sqlalchemy.orm import Session
 from typing import List
-
+import joblib
 
 
 from .database import engine, Base, get_db
 from .worker import trigger_analysis,eval
 from .schemas import IngestionPayload
 from .model import ShippingRecordModel
+from ml.train import train_and_save_challenger_model,train_and_save_champion_model
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-MODEL_LOC = BASE_DIR / 'models/shipping_rf_model.pkl'
+CHAMPION_MODEL_PATH = BASE_DIR / "models/champion/shipping_rf_champion_model.pkl"
+CHALLENGER_MODEL_PATH = BASE_DIR / "models/challenger/shipping_rf_challenger_model.pkl"
 TEST_LOC = BASE_DIR / 'data/test_set.csv'
+METRICS_DIR = BASE_DIR / "MLFLOW_TRACKING_URI/"
+METRICS_DIR.mkdir(parents=True, exist_ok=True)
+
+
 # --- LIFESPAN STARTUP CHECK ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,7 +73,7 @@ app.add_middleware(
 )
 
 
-@app.get("/ingest")
+@app.post("/ingest")
 def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
     if not payload.records:
         logger.warning("Payload record collection is empty.")
@@ -100,8 +108,19 @@ def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
 
 
 @app.post('/retrain_model')
-def retrain_model(start_id:int,end_id:int):
-    eval(start_id,end_id)
-        
+def retrain_model(start_id, end_id):
+    if CHAMPION_MODEL_PATH.exists():
+        champ_model = joblib.load(CHAMPION_MODEL_PATH)
+        logger.info('model found and loaded')
+    else:
+        champ_model = train_and_save_champion_model()
+    temp = cost_eval(start_id, end_id)
+    if temp == True:
+        return 'New Challenger Model has outperformed Champ'
+    else:
+        return 'Champ has won'
+    
+    
+       
     
         

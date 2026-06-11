@@ -4,7 +4,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import joblib
 from sklearn.ensemble import RandomForestClassifier
-from ml.pipeline import process_raw_data
+from ml.pipeline import process_raw_data, slidding_windows_process
 import logging
 from pathlib import Path
 import mlflow
@@ -94,38 +94,7 @@ def train_and_save_champion_model(model_name: str = 'shipping_rf_champion_model'
         raise e
 
 def train_and_save_challenger_model(start_id: int, end_id: int, model_name: str = 'shipping_rf_challenger_model'):
-    engine = create_engine(DATABASE_URL)
-    prod_query = f"""
-        SELECT warehouse_block, mode_of_shipment, customer_care_calls, 
-               customer_rating, cost_of_the_product, prior_purchases, 
-               product_importance, gender, discount_offered, weight_in_gms,
-               ground_truth_reached_on_time
-        FROM shipping_records 
-        WHERE id BETWEEN {start_id} AND {end_id}
-          AND ground_truth_reached_on_time IS NOT NULL
-    """
-    prod_df = pd.read_sql(prod_query, con=engine)
-    if prod_df.empty:
-        logger.error("NO DATA FOR TRAINING")
-        return
-
-    base_query = """
-        SELECT warehouse_block, mode_of_shipment, customer_care_calls, 
-               customer_rating, cost_of_the_product, prior_purchases, 
-               product_importance, gender, discount_offered, weight_in_gms,
-               ground_truth_reached_on_time
-        FROM shipping_records
-        WHERE id < 5000 
-          AND ground_truth_reached_on_time IS NOT NULL
-        LIMIT 3000
-    """
-    base_df = pd.read_sql(base_query, con=engine)
-    if base_df.empty:
-        logger.error("NO DATA FOR TRAINING")
-        return
-
-    training_df = pd.concat([base_df, prod_df], ignore_index=True)
-    X_train, X_test, y_train, y_test = process_raw_data(df=training_df, action='train')
+    X_train, X_test, y_train, y_test = slidding_windows_process(start_id,end_id)
     logger.info('TRAINING THE MODEL')
     try:
         logger.info('PROCESSED DATA LOADED')

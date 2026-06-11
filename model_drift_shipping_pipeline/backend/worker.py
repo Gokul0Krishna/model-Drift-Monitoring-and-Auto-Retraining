@@ -1,4 +1,4 @@
-from sqlalchemy.sql.coercions import expect
+import shutil
 from math import exp
 import os
 import pandas as pd
@@ -7,6 +7,8 @@ from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import logging
 from pathlib import Path
+import shutil
+from mlflow.tracking import MlflowClient
 
 from ml.monitor import run_check
 from ml.train import train_and_save_challenger_model
@@ -16,15 +18,14 @@ logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv('REDIS_URL')
 DATABASE_URL = os.getenv('DATABASE_URL')
-
+METRICS_DIR = BASE_DIR / "MLFLOW_TRACKING_URI/"
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-CHAMPION_MODEL_DIR = BASE_DIR / "models/champion/"
-CHAMPION_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+CHAMPION_MODEL_PATH = BASE_DIR / "models/champion/shipping_rf_champion_model.pkl"
+CHAMPION_MODEL = 'shipping_rf_champion_model'
 
-CHALLENGER_MODEL_DIR = BASE_DIR / "models/challenger/"
-CHALLENGER_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-
+CHALLENGER_MODEL_PATH = BASE_DIR / "models/challenger/shipping_rf_challenger_model.pkl"
+CHALLENGER_MODEL = 'shipping_rf_challenger_model'
 
 celery_app = Celery('tasks', broker=REDIS_URL)
 
@@ -60,14 +61,41 @@ def trigger_analysis(start_id, end_id):
     return drift_detected
 
 @celery_app.task()
-def eval(start_id,end_id):
+def cost_eval(start_id,end_id):
     try:
         val_acc = train_and_save_challenger_model(start_id,end_id)
         logger.info(f'CHALLENGER MODEL TRAINING DONE, VALIDATION COST: {val_acc}')
     except Exception as e:
         logger.error(f'CHALLENGER MODEL TRAINING ERROR: {e}')
         return
-    if val_acc:
-        
+    client = MlflowClient()
+    champ_experiment = client.get_experiment_by_name(CHAMPION_MODEL)
+    champ_runs = client.search_runs(experiment_ids=[champ_experiment.experiment_id], order_by=["attributes.start_time DESC"], max_results=1)
+    if not champ_runs:
+        logger.error("No runs found in the experiment")
+        return
+    best_run = champ_runs[0]
+    champ_run_cost = best_run.data.metrics.get('validation_loss')
+
+    chall_experiment = client.get_experiment_by_name(CHALLENGER_MODEL)
+    chall_runs = client.search_runs(experiment_ids=[chall_experiment.experiment_id], order_by=["attributes.start_time DESC"], max_results=1)
+    if not chall_runs:
+        logger.error("No runs found in the experiment")
+        return
+    chall_run = chall_runs[0]
+    chall_run_cost = chall_run.data.metrics.get('validation_loss')
+    
+
+    if chall_run_cost<champ_run_cost:
+            shutil.copy2(CHALLENGER_MODEL_PATH, CHAMPION_MODEL_PATH)
+            os.remove(CHALLENGER_MODEL_PATH)
+            return True
+    else:
+        os.remove(CHALLENGER_MODEL_PATH)
+    
+    return False
+    
+
+   
 
     
