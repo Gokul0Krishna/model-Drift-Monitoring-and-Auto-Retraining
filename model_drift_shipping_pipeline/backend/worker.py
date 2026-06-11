@@ -4,7 +4,7 @@ from celery import Celery
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import logging
-from ..ml.monitor import run_drift_check
+from ml.monitor import run_check
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def trigger_analysis(start_id, end_id):
     engine.dispose()
     logger.info('DATA INGESTION SUCCESSFULL')
     logger.info('STARTING DRIFT CHECK')
-    drift_detected = run_drift_check(production_batch_df)
+    drift_detected = run_check(production_batch_df)
     logger.info(f'DRIFT DETECTED: {drift_detected}')
 
 

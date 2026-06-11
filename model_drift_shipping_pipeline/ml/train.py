@@ -19,7 +19,9 @@ os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
 
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI")
 DATABASE_URL = os.getenv("DATABASE_URL")
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
 CHAMPION_MODEL_DIR = BASE_DIR / "models/champion/"
 CHAMPION_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -30,6 +32,20 @@ logger = logging.getLogger(__name__)
 
 mlflow.set_tracking_uri("MLFLOW_TRACKING_URI") 
 mlflow.set_experiment("model-drift-shipping-pipeline")
+
+def calculate_logistics_cost(y_true, y_pred) -> float:
+    """
+    Computes custom financial penalty thresholds based on e-commerce logistics outcomes:
+    - False Positive (Predicted Late, arrived On-Time): Low Cost ($5 notification/voucher)
+    - False Negative (Predicted On-Time, arrived Late): Critical Cost ($50 SLA penalty/support call)
+    """
+    total_cost = 0.0
+    for true, pred in zip(y_true, y_pred):
+        if true == 0 and pred == 1:   # False Positive
+            total_cost += 5.0
+        elif true == 1 and pred == 0: # False Negative (Missed Delay - Catastrophic)
+            total_cost += 50.0
+    return total_cost
 
 def train_and_save_champion_model(model_name: str = 'shipping_rf_champion_model'):
     '''
@@ -51,13 +67,13 @@ def train_and_save_champion_model(model_name: str = 'shipping_rf_champion_model'
             
             model.fit(X_train, y_train)
             
-            train_acc = model.score(X_train, y_train)
-            val_acc = model.score(X_test, y_test)
+            train_acc = calculate_logistics_cost(X_train, y_train)
+            val_acc = calculate_logistics_cost(X_test, y_test)
 
             mlflow.log_param("n_estimators", params['n_estimators'])
             mlflow.log_param("max_depth", params['max_depth'])
-            mlflow.log_metric("train_accuracy", train_acc)
-            mlflow.log_metric("test_accuracy", val_acc)
+            mlflow.log_metric("train_cost", train_acc)
+            mlflow.log_metric("val_cost", val_acc)
             
             mlflow.sklearn.log_model(
                 sk_model=model,
@@ -68,6 +84,8 @@ def train_and_save_champion_model(model_name: str = 'shipping_rf_champion_model'
             joblib.dump(model, CHAMPION_MODEL_DIR / f'{model_name}.pkl')
             
             logger.info('MODEL TRAINED, LOGGED TO MLFLOW, AND SAVED LOCAL')
+        
+        return {"val_cost": val_acc}
             
     except Exception as e:
         logger.error(f'EXCEPTION RAISED: {e}', exc_info=True)
@@ -121,13 +139,13 @@ def train_and_save_challenger_model(start_id: int, end_id: int, model_name: str 
             
             model.fit(X_train, y_train)
             
-            train_acc = model.score(X_train, y_train)
-            val_acc = model.score(X_test, y_test)
+            train_acc = calculate_logistics_cost(X_train, y_train)
+            val_acc = calculate_logistics_cost(X_test, y_test)
 
             mlflow.log_param("n_estimators", params['n_estimators'])
             mlflow.log_param("max_depth", params['max_depth'])
-            mlflow.log_metric("train_accuracy", train_acc)
-            mlflow.log_metric("test_accuracy", val_acc)
+            mlflow.log_metric("train_cost", train_acc)
+            mlflow.log_metric("val_cost", val_acc)
             
             mlflow.sklearn.log_model(
                 sk_model=model,
@@ -135,9 +153,10 @@ def train_and_save_challenger_model(start_id: int, end_id: int, model_name: str 
                 registered_model_name=model_name,
                 serialization_format="skops"
             )
-            joblib.dump(model, CHAMPION_MODEL_DIR / f'{model_name}.pkl')
+            joblib.dump(model, CHALLENGER_MODEL_DIR / f'{model_name}.pkl')
             
             logger.info('MODEL TRAINED, LOGGED TO MLFLOW, AND SAVED LOCAL')
+        return {"val_cost": val_acc}
             
     except Exception as e:
         logger.error(f'EXCEPTION RAISED: {e}', exc_info=True)

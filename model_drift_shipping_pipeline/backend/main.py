@@ -13,7 +13,7 @@ from typing import List
 
 
 from .database import engine, Base, get_db
-from .worker import trigger_analysis
+from .worker import trigger_analysis,eval
 from .schemas import IngestionPayload
 from .model import ShippingRecordModel
 
@@ -65,7 +65,7 @@ app.add_middleware(
 )
 
 
-@app.post("/ingest")
+@app.get("/ingest")
 def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
     if not payload.records:
         logger.warning("Payload record collection is empty.")
@@ -84,12 +84,11 @@ def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
         end_id = inserted_objects[-1].id
         logger.info(f"Successfully stored {len(inserted_objects)} records. ID Range: {start_id} - {end_id}")
 
-        trigger_analysis.delay(start_id, end_id)
+        drift_analyisis = trigger_analysis.delay(start_id, end_id)
         
 
         return {
-            "status": "success",
-            "message": "Data saved and drift execution queued.",
+            'analysis_id': drift_analyisis.id,
             "records_ingested": len(inserted_objects),
             "batch_range": {"start_id": start_id, "end_id": end_id}
         }
@@ -99,5 +98,10 @@ def ingest_data(payload: IngestionPayload, db: Session = Depends(get_db)):
         logger.error(f"Failed handling ingestion storage stream: {e}")
         raise HTTPException(status_code=500, detail="Database write failure.")
 
+
+@app.post('/retrain_model')
+def retrain_model(start_id:int,end_id:int):
+    eval(start_id,end_id)
+        
     
         
