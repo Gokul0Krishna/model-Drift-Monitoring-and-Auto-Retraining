@@ -1,0 +1,87 @@
+name: MLOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Run Unit & Integration Tests
+    runs-on: ubuntu-latest
+
+    # Spin up a live Postgres service container for our pytest suites
+    services:
+      postgres:
+        image: postgres:alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: shipping_db
+        ports:
+          - 5432:5432
+        # Wait until postgres is healthy before running steps
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip' # Speeds up subsequent runs by caching dependencies
+
+      - name: Install Project Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest pytest-mock
+
+      - name: Run Test Suite via Pytest
+        env:
+          # Inject mock/local connection strings for the ephemeral test runner environment
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shipping_db
+          MLFLOW_TRACKING_URI: file://./mlruns
+        run: |
+          pytest tests/
+
+  build-docker:
+    name: Build Microservice Docker Images
+    needs: test # This job ONLY runs if the 'test' job passes successfully
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: actions/setup-docker-buildx-action@v3
+        with:
+          version: v0.10.0
+
+      - name: Build Backend API Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: false # Set to true later when you hook up DockerHub/AWS ECR secrets
+          tags: shipping-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Dashboard Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./dashboard/Dockerfile
+          push: false
+          tags: shipping-dashboard:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
